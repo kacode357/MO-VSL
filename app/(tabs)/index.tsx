@@ -12,7 +12,6 @@ export default function HomeScreen() {
   const [internetStatus, setInternetStatus] = useState('Checking...');
 
   useEffect(() => {
-    // Retrieve internet status from AsyncStorage
     const getInternetStatus = async () => {
       try {
         const status = await AsyncStorage.getItem('internet_status');
@@ -100,21 +99,20 @@ export default function HomeScreen() {
               <ThemedText style={styles.buttonText}>DỊCH OFFLINE</ThemedText>
             </Pressable>
           )}
-          <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              pressed && styles.buttonPressed,
-            ]}
-            onPress={() => router.push('/upload')}
-            accessible
-            accessibilityLabel="Tải video ngôn ngữ ký hiệu lên"
-            hitSlop={10}
-          >
-            <Ionicons name="cloud-upload-outline" size={24} color="#FFD700" style={styles.icon} />
-            <ThemedText style={styles.buttonText}>TẢI VIDEO LÊN</ThemedText>
-          </Pressable>
-       
         </ThemedView>
+        {/* Thêm biểu tượng tải lên ở góc phải */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.uploadIconContainer,
+            pressed && styles.buttonPressed,
+          ]}
+          onPress={() => router.push('/upload')}
+          accessible
+          accessibilityLabel="Tải video ngôn ngữ ký hiệu lên"
+          hitSlop={10}
+        >
+          <Ionicons name="cloud-upload-outline" size={30} color="#FFD700" />
+        </Pressable>
         <View style={styles.versionContainer}>
           <ThemedText style={styles.versionText}>Version 1.0.0</ThemedText>
         </View>

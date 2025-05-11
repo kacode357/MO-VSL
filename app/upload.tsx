@@ -12,6 +12,7 @@ import {
     View,
     Text,
     TouchableOpacity,
+    Linking,
 } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -28,6 +29,7 @@ const Upload = () => {
     const [modalMessage, setModalMessage] = useState('');
     const [mediaLibraryGranted, setMediaLibraryGranted] = useState(false);
     const [modalType, setModalType] = useState<'error' | 'success' | null>(null);
+    const [showGuideModal, setShowGuideModal] = useState(true); // Trạng thái cho modal hướng dẫn
     const translationApi = new TranslationAPI();
 
     // Function to pick a video from media library
@@ -35,6 +37,7 @@ const Upload = () => {
         try {
             if (!mediaLibraryGranted) {
                 setModalMessage('Cần cấp quyền truy cập thư viện để chọn video.');
+                setModalType('error');
                 setModalVisible(true);
                 return;
             }
@@ -50,6 +53,7 @@ const Upload = () => {
             }
         } catch (error) {
             setModalMessage('Không thể chọn video. Vui lòng thử lại.');
+            setModalType('error');
             setModalVisible(true);
             console.error('Error picking video:', error);
         }
@@ -60,6 +64,7 @@ const Upload = () => {
         try {
             if (!mediaLibraryGranted) {
                 setModalMessage('Cần cấp quyền truy cập camera và micro để quay video.');
+                setModalType('error');
                 setModalVisible(true);
                 return;
             }
@@ -75,6 +80,7 @@ const Upload = () => {
             }
         } catch (error) {
             setModalMessage('Không thể quay video. Vui lòng thử lại.');
+            setModalType('error');
             setModalVisible(true);
             console.error('Error recording video:', error);
         }
@@ -111,6 +117,28 @@ const Upload = () => {
         } finally {
             setIsUploading(false);
         }
+    };
+
+    // Xử lý mở link YouTube
+    const handleViewGuide = async () => {
+        const youtubeUrl = 'https://www.youtube.com/watch?v=ya5UbN60W4k';
+        try {
+            const supported = await Linking.canOpenURL(youtubeUrl);
+            if (supported) {
+                await Linking.openURL(youtubeUrl);
+            } else {
+                console.error('Cannot open URL:', youtubeUrl);
+                setModalMessage('Không thể mở liên kết YouTube. Vui lòng thử lại.');
+                setModalType('error');
+                setModalVisible(true);
+            }
+        } catch (error) {
+            console.error('Error opening YouTube link:', error);
+            setModalMessage('Đã xảy ra lỗi khi mở liên kết. Vui lòng thử lại.');
+            setModalType('error');
+            setModalVisible(true);
+        }
+        setShowGuideModal(false); // Đóng modal sau khi mở link
     };
 
     // Dynamic styles based on color scheme
@@ -249,6 +277,27 @@ const Upload = () => {
             right: 1,
             padding: 2,
         },
+        // Styles cho modal hướng dẫn
+        guideButtonContainer: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            width: '100%',
+        },
+        guideCloseButton: {
+            backgroundColor: '#FF4444',
+            borderRadius: 8,
+            paddingVertical: 10,
+            paddingHorizontal: 10,
+            flex: 3, // Chiếm 3 phần
+            marginRight: 10,
+        },
+        guideButton: {
+            backgroundColor: '#4CAF50',
+            borderRadius: 8,
+            paddingVertical: 10,
+            paddingHorizontal: 10,
+            flex: 7, // Chiếm 7 phần
+        },
     });
 
     return (
@@ -257,6 +306,67 @@ const Upload = () => {
                 <CameraPermissionHandler
                     onPermissionsGranted={(mediaGranted) => setMediaLibraryGranted(mediaGranted)}
                 />
+                {/* Modal hướng dẫn quay video */}
+                <Modal
+                    animationType="slide"
+                    transparent={true}
+                    visible={showGuideModal}
+                    onRequestClose={() => setShowGuideModal(false)}
+                >
+                    <View style={modalStyles.centeredView}>
+                        <View style={modalStyles.modalView}>
+                            <Text style={modalStyles.modalText}>Bạn có biết cách quay video không?</Text>
+                            <View style={modalStyles.guideButtonContainer}>
+                                <TouchableOpacity
+                                    style={modalStyles.guideCloseButton}
+                                    onPress={() => setShowGuideModal(false)}
+                                >
+                                    <Text style={modalStyles.buttonText}>Đóng</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={modalStyles.guideButton}
+                                    onPress={handleViewGuide}
+                                >
+                                    <Text style={modalStyles.buttonText}>Xem hướng dẫn</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
+                {/* Modal thông báo lỗi/thành công */}
+                <Modal
+                    animationType="slide"
+                    transparent={true}
+                    visible={modalVisible}
+                    onRequestClose={() => {
+                        setModalVisible(false);
+                        setModalType(null);
+                    }}
+                >
+                    <View style={modalStyles.centeredView}>
+                        <View style={modalStyles.modalView}>
+                            <TouchableOpacity
+                                style={modalStyles.closeButton}
+                                onPress={() => {
+                                    setModalVisible(false);
+                                    setModalType(null);
+                                }}
+                            >
+                                <Text style={{ fontSize: 24, color: modalType === 'success' ? 'white' : '#333' }}>×</Text>
+                            </TouchableOpacity>
+                            <Text style={modalStyles.modalText}>{modalMessage}</Text>
+                            <TouchableOpacity
+                                style={modalStyles.customButton}
+                                onPress={() => {
+                                    setModalVisible(false);
+                                    setModalType(null);
+                                }}
+                            >
+                                <Text style={modalStyles.buttonText}>Đóng</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
                 <ThemedView style={dynamicStyles.container}>
                     <ThemedText type="title" style={dynamicStyles.title}>
                         Tải Video Lên
@@ -324,39 +434,6 @@ const Upload = () => {
                         </Pressable>
                     </ThemedView>
                 </ThemedView>
-                <Modal
-                    animationType="slide"
-                    transparent={true}
-                    visible={modalVisible}
-                    onRequestClose={() => {
-                        setModalVisible(false);
-                        setModalType(null);
-                    }}
-                >
-                    <View style={modalStyles.centeredView}>
-                        <View style={modalStyles.modalView}>
-                            <TouchableOpacity
-                                style={modalStyles.closeButton}
-                                onPress={() => {
-                                    setModalVisible(false);
-                                    setModalType(null);
-                                }}
-                            >
-                                <Text style={{ fontSize: 24, color: modalType === 'success' ? 'white' : '#333' }}>×</Text>
-                            </TouchableOpacity>
-                            <Text style={modalStyles.modalText}>{modalMessage}</Text>
-                            <TouchableOpacity
-                                style={modalStyles.customButton}
-                                onPress={() => {
-                                    setModalVisible(false);
-                                    setModalType(null);
-                                }}
-                            >
-                                <Text style={modalStyles.buttonText}>Đóng</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </Modal>
             </SafeAreaView>
         </TouchableWithoutFeedback>
     );

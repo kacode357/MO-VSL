@@ -11,7 +11,6 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 10,
-  
   },
   header: {
     alignItems: 'center',
@@ -85,6 +84,20 @@ export const styles = StyleSheet.create({
   internetStatus: {
     fontSize: 16,
     textAlign: 'center',
-    color: '#FF4500', 
+    color: '#FF4500',
+  },
+  // Cập nhật style cho biểu tượng tải lên
+  uploadIconContainer: {
+    position: 'absolute',
+    bottom: 50, // Đặt ở góc dưới
+    right: 20,  // Giữ góc phải
+    backgroundColor: '#42815a',
+    borderRadius: 50,
+    padding: 10,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
 });

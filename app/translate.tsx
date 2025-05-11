@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Text, TouchableOpacity, View, Platform } from 'react-native';
 import { CameraView } from 'expo-camera';
 import * as Speech from 'expo-speech';
@@ -23,19 +23,20 @@ const DictionaryScreen = () => {
   const [prediction, setPrediction] = useState<Prediction[] | null>(null);
   const [currentPredictionIndex, setCurrentPredictionIndex] = useState(0);
   const [supportedResolutions, setSupportedResolutions] = useState<string[]>([]);
-  const [isTranslating, setIsTranslating] = useState(false); // New state for loading
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [isCameraReady, setIsCameraReady] = useState(false);
 
   const cameraRef = useRef<CameraView | null>(null);
   const isRealtimeActive = useRef(false);
   const videoQueue = useRef<string[]>([]);
   const isProcessingQueue = useRef(false);
-  const clientId = uuid.v4();
+  const clientId = useRef(uuid.v4() as string).current;
   const translationAPI = useRef(new TranslationAPI()).current;
 
-  // Check supported resolutions on mount
+  // Kiểm tra độ phân giải được hỗ trợ
   useEffect(() => {
     const checkResolutions = async () => {
-      if (cameraRef.current) {
+      if (cameraRef.current && isCameraReady) {
         try {
           const sizes = await cameraRef.current.getAvailablePictureSizesAsync();
           setSupportedResolutions(sizes);
@@ -46,38 +47,42 @@ const DictionaryScreen = () => {
       }
     };
     checkResolutions();
-  }, [cameraProps.facing]);
+  }, [cameraProps.facing, isCameraReady]);
 
-  // Utility function to toggle camera properties
-  const toggleProperty = (
-    prop: keyof CameraProps,
-    option1: CameraProps[keyof CameraProps],
-    option2: CameraProps[keyof CameraProps]
-  ) => {
-    setCameraProps((current) => ({
-      ...current,
-      [prop]: current[prop] === option1 ? option2 : option1,
-    }));
-  };
+  // Tối ưu hóa toggle properties
+  const toggleProperty = useCallback(
+    (prop: keyof CameraProps, option1: CameraProps[keyof CameraProps], option2: CameraProps[keyof CameraProps]) => {
+      setCameraProps((current) => ({
+        ...current,
+        [prop]: current[prop] === option1 ? option2 : option1,
+      }));
+    },
+    []
+  );
 
-  // Handle video recording
-  const startRecording = () => {
-    setPrediction(null);
-    void (mode === 'normal' ? startRecordingNormal() : startRecordingRealtime());
-  };
-  const getBestVideoQuality = (preferredQuality: string) => {
-    const supportedQualities = ['480p', '720p', '1080p']; // Known quality options
+  // Chọn chất lượng video tốt nhất
+  const getBestVideoQuality = useCallback((preferredQuality: string) => {
     if (supportedResolutions.includes(preferredQuality)) {
       return preferredQuality;
     }
     console.warn(
       `${preferredQuality} not supported for ${cameraProps.facing} camera. Falling back to available resolution.`
     );
-    // Fallback to 720p if available, otherwise use 480p or 1080p
     if (supportedResolutions.includes('1280x720')) return '720p';
     if (supportedResolutions.includes('640x480')) return '480p';
     return '1080p'; // Default fallback
-  };
+  }, [supportedResolutions, cameraProps.facing]);
+
+  // Bắt đầu quay video
+  const startRecording = useCallback(() => {
+    if (!isCameraReady || !cameraRef.current) {
+      console.warn('Camera is not ready or not initialized');
+      return;
+    }
+    setPrediction(null);
+    mode === 'normal' ? startRecordingNormal() : startRecordingRealtime();
+  }, [mode, isCameraReady]);
+
   const startRecordingNormal = async () => {
     console.log(`Starting normal recording with ${cameraProps.facing} camera`);
     setIsRecording(true);
@@ -85,8 +90,10 @@ const DictionaryScreen = () => {
       const selectedQuality = getBestVideoQuality('720p');
       console.log(`Selected video quality: ${selectedQuality}`);
       const video = await cameraRef.current?.recordAsync();
-      if (video) {
-        await saveVideoToMediaLibrary(video.uri);
+      if (video?.uri) {
+        if (mediaLibraryPermission) {
+          await saveVideoToMediaLibrary(video.uri);
+        }
         setIsTranslating(true);
         const predictions = await translationAPI.callNormalTranslationApi(video.uri);
         setPrediction(predictions);
@@ -99,35 +106,39 @@ const DictionaryScreen = () => {
     }
     setIsRecording(false);
   };
-  const startRecordingRealtime = () => {
+
+  const startRecordingRealtime = useCallback(() => {
+    if (!isCameraReady) return;
     isRealtimeActive.current = true;
     setIsRecording(true);
     recordAndSend();
-  };
+  }, [isCameraReady]);
 
-  const recordAndSend = async () => {
-    if (!isRealtimeActive.current) return;
+  const recordAndSend = useCallback(async () => {
+    if (!isRealtimeActive.current || !cameraRef.current) return;
 
     try {
-      const recordPromise = cameraRef.current?.recordAsync();
+      const recordPromise = cameraRef.current.recordAsync();
       await new Promise((resolve) => setTimeout(resolve, 1000));
       if (!isRealtimeActive.current) return;
 
-      cameraRef.current?.stopRecording();
+      cameraRef.current.stopRecording();
       const video = await recordPromise;
-      if (video) {
+      if (video?.uri) {
         videoQueue.current.push(video.uri);
         processQueue();
       }
     } catch (error) {
-      console.error('Recording error:', error);
+      console.error('Realtime recording error:', error);
     }
 
-    if (isRealtimeActive.current) recordAndSend();
-  };
+    if (isRealtimeActive.current) {
+      setTimeout(recordAndSend, 100); // Giảm độ trễ giữa các lần quay
+    }
+  }, []);
 
-  const processQueue = async () => {
-    if (isProcessingQueue.current) return;
+  const processQueue = useCallback(async () => {
+    if (isProcessingQueue.current || videoQueue.current.length === 0) return;
     isProcessingQueue.current = true;
 
     while (videoQueue.current.length > 0) {
@@ -146,20 +157,22 @@ const DictionaryScreen = () => {
       }
     }
     isProcessingQueue.current = false;
-  };
+  }, [clientId]);
 
-  const stopRecording = () => {
-    cameraRef.current?.stopRecording();
+  const stopRecording = useCallback(() => {
+    if (cameraRef.current) {
+      cameraRef.current.stopRecording();
+    }
     setIsRecording(false);
     if (mode === 'realtime') {
       isRealtimeActive.current = false;
       videoQueue.current = [];
+      isProcessingQueue.current = false;
     }
-  };
+  }, [mode]);
 
-  // Handle media
+  // Lưu video vào thư viện
   const saveVideoToMediaLibrary = async (uri: string) => {
-    if (!mediaLibraryPermission) return;
     try {
       const asset = await MediaLibrary.createAssetAsync(uri);
       const assetInfo = await MediaLibrary.getAssetInfoAsync(asset);
@@ -169,23 +182,25 @@ const DictionaryScreen = () => {
     }
   };
 
-  const handleVideoPicked = async (uri: string) => {
+  // Xử lý video được chọn
+  const handleVideoPicked = useCallback(async (uri: string) => {
     setCurrentPredictionIndex(0);
     setPrediction(null);
     try {
-      setIsTranslating(true); // Set translating state
+      setIsTranslating(true);
       const predictions = await translationAPI.callNormalTranslationApi(uri);
       setPrediction(predictions);
-      setIsTranslating(false); // Clear translating state
+      setIsTranslating(false);
       displayPrediction(predictions);
     } catch (error) {
       console.error('API error:', error);
-      setIsTranslating(false); // Clear translating state on error
+      setIsTranslating(false);
     }
-  };
+  }, []);
 
-  // Handle predictions
-  const displayPrediction = (predictions: Prediction[]) => {
+  // Hiển thị dự đoán
+  const displayPrediction = useCallback((predictions: Prediction[]) => {
+    if (!predictions?.length) return;
     let index = 0;
     const intervalId = setInterval(() => {
       if (index < predictions.length) {
@@ -196,10 +211,10 @@ const DictionaryScreen = () => {
         clearInterval(intervalId);
       }
     }, 2000);
-  };
+  }, []);
 
-  const readPredictionAloud = (predictions: Prediction[]) => {
-    console.log('Reading predictions:', predictions);
+  // Đọc dự đoán
+  const readPredictionAloud = useCallback((predictions: Prediction[]) => {
     const speakNext = (index: number) => {
       if (index >= predictions.length) return;
       const item = predictions[index];
@@ -209,16 +224,19 @@ const DictionaryScreen = () => {
       });
     };
     speakNext(0);
-  };
+  }, []);
 
-  // Toggle mode
-  const toggleMode = () => {
-    const newMode = mode === 'normal' ? 'realtime' : 'normal';
-    setMode(newMode);
-    console.log(`Switched to ${newMode} mode`);
-  };
+  // Chuyển đổi chế độ
+  const toggleMode = useCallback(() => {
+    setMode((prev) => (prev === 'normal' ? 'realtime' : 'normal'));
+    setPrediction(null);
+    setCurrentPredictionIndex(0);
+    if (isRecording) {
+      stopRecording();
+    }
+  }, [isRecording, stopRecording]);
 
-  // Determine video quality
+  // Xác định chất lượng video
   const videoQuality = supportedResolutions.includes('640x480') ? '480p' : '720p';
 
   return (
@@ -236,11 +254,11 @@ const DictionaryScreen = () => {
           videoQuality={videoQuality}
           autofocus="on"
           enableTorch={cameraProps.enableTorch}
+          onCameraReady={() => setIsCameraReady(true)}
         >
-          {/* Loading overlay for normal mode */}
           {isTranslating && mode === 'normal' && (
             <View style={styles.loadingOverlay}>
-              <Text style={styles.loadingText}>Đang dịch ... </Text>
+              <Text style={styles.loadingText}>Đang dịch...</Text>
             </View>
           )}
           <TouchableOpacity
@@ -261,6 +279,7 @@ const DictionaryScreen = () => {
           <TouchableOpacity
             style={[styles.recordButton, styles.centerBottom, isRecording && styles.recordingButton]}
             onPress={isRecording ? stopRecording : startRecording}
+            disabled={!isCameraReady}
           >
             <Ionicons name={isRecording ? 'stop' : 'videocam'} size={30} color="#fff" />
           </TouchableOpacity>

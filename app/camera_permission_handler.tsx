@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 interface CameraPermissionHandlerProps {
-  onPermissionsGranted: (mediaLibraryGranted: boolean) => void;
+  onPermissionsGranted: (allPermissionsGranted: boolean) => void;
 }
 
 const CameraPermissionHandler: React.FC<CameraPermissionHandlerProps> = ({
@@ -15,47 +15,78 @@ const CameraPermissionHandler: React.FC<CameraPermissionHandlerProps> = ({
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
   const [modalVisible, setModalVisible] = useState(false);
+  const [modalMessage, setModalMessage] = useState('');
   const router = useRouter();
 
-  const requestPermissions = async () => {
-    if (!cameraPermission?.granted) {
-      const { status: cameraStatus } = await requestCameraPermission();
-      if (cameraStatus !== 'granted') {
+  // Hàm yêu cầu tất cả quyền cần thiết
+  const requestAllPermissions = async () => {
+    try {
+      // Kiểm tra và yêu cầu quyền camera
+      if (!cameraPermission?.granted) {
+        const { status } = await requestCameraPermission();
+        if (status !== 'granted') {
+          setModalMessage('Cần quyền camera để tiếp tục.');
+          setModalVisible(true);
+          onPermissionsGranted(false);
+          return false;
+        }
+      }
+
+      // Kiểm tra và yêu cầu quyền microphone
+      if (!microphonePermission?.granted) {
+        const { status } = await requestMicrophonePermission();
+        if (status !== 'granted') {
+          setModalMessage('Cần quyền microphone để tiếp tục.');
+          setModalVisible(true);
+          onPermissionsGranted(false);
+          return false;
+        }
+      }
+
+      // Kiểm tra và yêu cầu quyền thư viện media
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        setModalMessage('Cần quyền truy cập thư viện media để tiếp tục.');
         setModalVisible(true);
         onPermissionsGranted(false);
-        return;
+        return false;
       }
-    }
 
-    if (!microphonePermission?.granted) {
-      const { status: audioStatus } = await requestMicrophonePermission();
-      if (audioStatus !== 'granted') {
-        setModalVisible(true);
-        onPermissionsGranted(false);
-        return;
-      }
-    }
-
-    const { status: mediaStatus } = await MediaLibrary.requestPermissionsAsync();
-    if (mediaStatus !== 'granted') {
+      // Tất cả quyền được cấp
+      setModalVisible(false);
+      onPermissionsGranted(true);
+      return true;
+    } catch (error) {
+      console.error('Lỗi khi yêu cầu quyền:', error);
+      setModalMessage('Đã xảy ra lỗi khi yêu cầu quyền. Vui lòng thử lại.');
       setModalVisible(true);
+      onPermissionsGranted(false);
+      return false;
     }
-
-    onPermissionsGranted(mediaStatus === 'granted');
   };
 
+  // Kiểm tra quyền khi component mount
   useEffect(() => {
     if (!cameraPermission || !microphonePermission) {
-      requestPermissions();
-    } else if (cameraPermission.granted && microphonePermission.granted) {
-      MediaLibrary.requestPermissionsAsync().then(({ status }) => {
-        onPermissionsGranted(status === 'granted');
+      // Đợi thông tin quyền được tải
+      return;
+    }
+
+    if (cameraPermission.granted && microphonePermission.granted) {
+      // Kiểm tra quyền media nếu camera và mic đã được cấp
+      MediaLibrary.getPermissionsAsync().then(({ status }) => {
+        if (status === 'granted') {
+          onPermissionsGranted(true);
+        } else {
+          requestAllPermissions();
+        }
       });
     } else {
-      setModalVisible(true);
+      requestAllPermissions();
     }
   }, [cameraPermission, microphonePermission]);
 
+  // Hiển thị loading khi đang chờ thông tin quyền
   if (!cameraPermission || !microphonePermission) {
     return <View />;
   }
@@ -81,19 +112,12 @@ const CameraPermissionHandler: React.FC<CameraPermissionHandlerProps> = ({
           >
             <Ionicons name="close" size={24} color="#333" />
           </TouchableOpacity>
-          <Text style={modalStyles.modalText}>
-            Cần quyền để hiển thị camera và âm thanh
-          </Text>
+          <Text style={modalStyles.modalText}>{modalMessage || 'Cần cấp quyền để sử dụng camera và âm thanh.'}</Text>
           <TouchableOpacity
             style={modalStyles.customButton}
-            onPress={() => {
-              setModalVisible(false);
-              requestPermissions();
-            }}
+            onPress={requestAllPermissions}
           >
-            <Text style={modalStyles.buttonText}>
-              Cấp quyền
-            </Text>
+            <Text style={modalStyles.buttonText}>Thử lại</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -141,8 +165,9 @@ const modalStyles = StyleSheet.create({
   },
   closeButton: {
     position: 'absolute',
-    right: 1,
-    padding: 2,
+    top: 10,
+    right: 10,
+    padding: 5,
   },
 });
 
