@@ -1,13 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
-import { CameraView } from 'expo-camera';
-import * as Speech from 'expo-speech';
-import * as MediaLibrary from 'expo-media-library';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { CameraView } from 'expo-camera';
+import * as MediaLibrary from 'expo-media-library';
+import * as Speech from 'expo-speech';
+import React, { useEffect, useRef, useState } from 'react';
+import { Text, TouchableOpacity, View } from 'react-native';
+import { styles } from '../styles/DictionaryStyles';
+import { CameraProps } from '../types/CameraProps';
 import MediaPicker from './MediaPicker';
 import CameraPermissionHandler from './camera_permission_handler_offline';
-import { CameraProps } from '../types/CameraProps';
-import { styles } from '../styles/DictionaryStyles';
 
 const OfflineTranslateScreen = () => {
   const [cameraProps, setCameraProps] = useState<CameraProps>({

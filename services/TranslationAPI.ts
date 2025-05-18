@@ -1,5 +1,5 @@
 import axios from 'axios';
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface Prediction {
   gloss: string;
@@ -8,11 +8,12 @@ export interface Prediction {
 
 interface BaseAPIResponse {
   message?: string;
-
 }
+
 interface UploadAPIResponse extends BaseAPIResponse {
   message: string;
 }
+
 interface NormalAPIResponse extends BaseAPIResponse {
   results_merged: Array<{
     start_time: number;
@@ -40,9 +41,23 @@ export class TranslationAPI {
   private topK: string;
 
   constructor() {
-    this.apiUrl = process.env.EXPO_PUBLIC_API_URL;
     this.angleThreshold = '110';
     this.topK = '3';
+    // Initialize apiUrl asynchronously
+    this.initializeApiUrl();
+  }
+
+  private async initializeApiUrl() {
+    try {
+      const storedUrl = await AsyncStorage.getItem('api_url');
+      this.apiUrl = storedUrl || process.env.EXPO_PUBLIC_API_URL;
+      if (!this.apiUrl) {
+        console.warn('API URL is not set in AsyncStorage or environment variables');
+      }
+    } catch (error) {
+      console.error('Error loading API URL from AsyncStorage:', error);
+      this.apiUrl = process.env.EXPO_PUBLIC_API_URL;
+    }
   }
 
   async callNormalTranslationApi(videoUri: string, rotate: boolean = true): Promise<Prediction[]> {
@@ -52,7 +67,6 @@ export class TranslationAPI {
     }
 
     const url = `${this.apiUrl}/spoter`;
- 
 
     const formData = new FormData();
     formData.append('video_file', {
@@ -132,6 +146,7 @@ export class TranslationAPI {
       throw error;
     }
   }
+
   async callUploadApi(videoUri: string, label: string): Promise<string> {
     if (!this.apiUrl) {
       console.error('API URL is not set');
@@ -153,8 +168,8 @@ export class TranslationAPI {
       const response = await axios.post<UploadAPIResponse>(url, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-   
-      console.log(`[Upload API] Response received 2: ${response.data.message}`);
+
+      console.log(`[Upload API] Response received: ${response.data.message}`);
       return response.data.message;
     } catch (error) {
       if (axios.isAxiosError(error)) {

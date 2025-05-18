@@ -1,11 +1,11 @@
-import { Pressable, Image, SafeAreaView, View } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { styles } from '../../styles/HomeStyles';
-import React, { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Image, Pressable, SafeAreaView, View } from 'react-native';
+import { styles } from '../../styles/HomeStyles';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -100,18 +100,18 @@ export default function HomeScreen() {
             </Pressable>
           )}
         </ThemedView>
-        {/* Thêm biểu tượng tải lên ở góc phải */}
+        {/* Thay biểu tượng tải lên thành settings */}
         <Pressable
           style={({ pressed }) => [
             styles.uploadIconContainer,
             pressed && styles.buttonPressed,
           ]}
-          onPress={() => router.push('/upload')}
+          onPress={() => router.push('/settings')} // Chuyển hướng tới settings
           accessible
-          accessibilityLabel="Tải video ngôn ngữ ký hiệu lên"
+          accessibilityLabel="Mở cài đặt ứng dụng"
           hitSlop={10}
         >
-          <Ionicons name="cloud-upload-outline" size={30} color="#FFD700" />
+          <Ionicons name="settings-outline" size={30} color="#FFD700" />
         </Pressable>
         <View style={styles.versionContainer}>
           <ThemedText style={styles.versionText}>Version 1.0.0</ThemedText>

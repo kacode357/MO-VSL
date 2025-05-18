@@ -1,15 +1,16 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Text, TouchableOpacity, View, Platform } from 'react-native';
-import { CameraView } from 'expo-camera';
-import * as Speech from 'expo-speech';
-import * as MediaLibrary from 'expo-media-library';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CameraView } from 'expo-camera';
+import * as MediaLibrary from 'expo-media-library';
+import * as Speech from 'expo-speech';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Text, TouchableOpacity, View } from 'react-native';
 import uuid from 'react-native-uuid';
-import { TranslationAPI, Prediction } from '../services/TranslationAPI';
+import { Prediction, TranslationAPI } from '../services/TranslationAPI';
+import { styles } from '../styles/DictionaryStyles';
+import { CameraProps } from '../types/CameraProps';
 import MediaPicker from './MediaPicker';
 import CameraPermissionHandler from './camera_permission_handler';
-import { CameraProps } from '../types/CameraProps';
-import { styles } from '../styles/DictionaryStyles';
 
 const DictionaryScreen = () => {
   const [cameraProps, setCameraProps] = useState<CameraProps>({
@@ -25,6 +26,7 @@ const DictionaryScreen = () => {
   const [supportedResolutions, setSupportedResolutions] = useState<string[]>([]);
   const [isTranslating, setIsTranslating] = useState(false);
   const [isCameraReady, setIsCameraReady] = useState(false);
+  const [videoQuality, setVideoQuality] = useState<string>('720p'); // Default to 720p
 
   const cameraRef = useRef<CameraView | null>(null);
   const isRealtimeActive = useRef(false);
@@ -33,7 +35,28 @@ const DictionaryScreen = () => {
   const clientId = useRef(uuid.v4() as string).current;
   const translationAPI = useRef(new TranslationAPI()).current;
 
-  // Kiểm tra độ phân giải được hỗ trợ
+  // Load resolution from AsyncStorage
+  useEffect(() => {
+    const loadResolution = async () => {
+      try {
+        const savedResolution = await AsyncStorage.getItem('video_resolution');
+        if (savedResolution === '480p' || savedResolution === '720p') {
+          setVideoQuality(savedResolution);
+        } else {
+          // Fallback to 720p if no valid resolution is stored
+          await AsyncStorage.setItem('video_resolution', '720p');
+          setVideoQuality('720p');
+        }
+      } catch (error) {
+        console.error('Error loading resolution from AsyncStorage:', error);
+        // Fallback to 720p on error
+        setVideoQuality('720p');
+      }
+    };
+    loadResolution();
+  }, []);
+
+  // Check supported resolutions
   useEffect(() => {
     const checkResolutions = async () => {
       if (cameraRef.current && isCameraReady) {
@@ -49,7 +72,7 @@ const DictionaryScreen = () => {
     checkResolutions();
   }, [cameraProps.facing, isCameraReady]);
 
-  // Tối ưu hóa toggle properties
+  // Optimize toggle properties
   const toggleProperty = useCallback(
     (prop: keyof CameraProps, option1: CameraProps[keyof CameraProps], option2: CameraProps[keyof CameraProps]) => {
       setCameraProps((current) => ({
@@ -60,20 +83,30 @@ const DictionaryScreen = () => {
     []
   );
 
-  // Chọn chất lượng video tốt nhất
-  const getBestVideoQuality = useCallback((preferredQuality: string) => {
-    if (supportedResolutions.includes(preferredQuality)) {
-      return preferredQuality;
-    }
-    console.warn(
-      `${preferredQuality} not supported for ${cameraProps.facing} camera. Falling back to available resolution.`
-    );
-    if (supportedResolutions.includes('1280x720')) return '720p';
-    if (supportedResolutions.includes('640x480')) return '480p';
-    return '1080p'; // Default fallback
-  }, [supportedResolutions, cameraProps.facing]);
+  // Select the best video quality
+  const getBestVideoQuality = useCallback(
+    (preferredQuality: string) => {
+      // Map common resolution names to expo-camera formats
+      const resolutionMap: { [key: string]: string } = {
+        '480p': '640x480',
+        '720p': '1280x720',
+      };
+      const targetResolution = resolutionMap[preferredQuality] || preferredQuality;
 
-  // Bắt đầu quay video
+      if (supportedResolutions.includes(targetResolution)) {
+        return preferredQuality;
+      }
+      console.warn(
+        `${preferredQuality} (${targetResolution}) not supported for ${cameraProps.facing} camera. Falling back to available resolution.`
+      );
+      if (supportedResolutions.includes('1280x720')) return '720p';
+      if (supportedResolutions.includes('640x480')) return '480p';
+      return '720p'; // Default fallback
+    },
+    [supportedResolutions, cameraProps.facing]
+  );
+
+  // Start recording
   const startRecording = useCallback(() => {
     if (!isCameraReady || !cameraRef.current) {
       console.warn('Camera is not ready or not initialized');
@@ -87,7 +120,7 @@ const DictionaryScreen = () => {
     console.log(`Starting normal recording with ${cameraProps.facing} camera`);
     setIsRecording(true);
     try {
-      const selectedQuality = getBestVideoQuality('720p');
+      const selectedQuality = getBestVideoQuality(videoQuality);
       console.log(`Selected video quality: ${selectedQuality}`);
       const video = await cameraRef.current?.recordAsync();
       if (video?.uri) {
@@ -133,7 +166,7 @@ const DictionaryScreen = () => {
     }
 
     if (isRealtimeActive.current) {
-      setTimeout(recordAndSend, 100); // Giảm độ trễ giữa các lần quay
+      setTimeout(recordAndSend, 100);
     }
   }, []);
 
@@ -171,7 +204,7 @@ const DictionaryScreen = () => {
     }
   }, [mode]);
 
-  // Lưu video vào thư viện
+  // Save video to media library
   const saveVideoToMediaLibrary = async (uri: string) => {
     try {
       const asset = await MediaLibrary.createAssetAsync(uri);
@@ -182,7 +215,7 @@ const DictionaryScreen = () => {
     }
   };
 
-  // Xử lý video được chọn
+  // Handle picked video
   const handleVideoPicked = useCallback(async (uri: string) => {
     setCurrentPredictionIndex(0);
     setPrediction(null);
@@ -198,7 +231,7 @@ const DictionaryScreen = () => {
     }
   }, []);
 
-  // Hiển thị dự đoán
+  // Display prediction
   const displayPrediction = useCallback((predictions: Prediction[]) => {
     if (!predictions?.length) return;
     let index = 0;
@@ -213,7 +246,7 @@ const DictionaryScreen = () => {
     }, 2000);
   }, []);
 
-  // Đọc dự đoán
+  // Read prediction aloud
   const readPredictionAloud = useCallback((predictions: Prediction[]) => {
     const speakNext = (index: number) => {
       if (index >= predictions.length) return;
@@ -226,7 +259,7 @@ const DictionaryScreen = () => {
     speakNext(0);
   }, []);
 
-  // Chuyển đổi chế độ
+  // Toggle mode
   const toggleMode = useCallback(() => {
     setMode((prev) => (prev === 'normal' ? 'realtime' : 'normal'));
     setPrediction(null);
@@ -235,9 +268,6 @@ const DictionaryScreen = () => {
       stopRecording();
     }
   }, [isRecording, stopRecording]);
-
-  // Xác định chất lượng video
-  const videoQuality = supportedResolutions.includes('640x480') ? '480p' : '720p';
 
   return (
     <>
@@ -251,7 +281,7 @@ const DictionaryScreen = () => {
           facing={cameraProps.facing}
           mode="video"
           flash={cameraProps.flash}
-          videoQuality={videoQuality}
+          videoQuality={videoQuality === '720p' ? '720p' : videoQuality === '480p' ? '480p' : undefined}
           autofocus="on"
           enableTorch={cameraProps.enableTorch}
           onCameraReady={() => setIsCameraReady(true)}

@@ -1,24 +1,24 @@
-import React, { useState } from 'react';
-import {
-    TextInput,
-    Pressable,
-    SafeAreaView,
-    ActivityIndicator,
-    StyleSheet,
-    useColorScheme,
-    TouchableWithoutFeedback,
-    Keyboard,
-    Modal,
-    View,
-    Text,
-    TouchableOpacity,
-    Linking,
-} from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import * as ImagePicker from 'expo-image-picker';
-import CameraPermissionHandler from './camera_permission_handler';
+import React, { useState } from 'react';
+import {
+    ActivityIndicator,
+    Keyboard,
+    Linking,
+    Modal,
+    Pressable,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    useColorScheme,
+    View,
+} from 'react-native';
 import { TranslationAPI } from '../services/TranslationAPI';
+import CameraPermissionHandler from './camera_permission_handler';
 
 const Upload = () => {
     const colorScheme = useColorScheme();
